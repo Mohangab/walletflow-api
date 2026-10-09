@@ -1,0 +1,8 @@
+# Integration tests run against H2 in PostgreSQL compatibility mode so the build
+# needs no Docker. CI additionally runs the same suite against a real PostgreSQL
+# (and Redis) by overriding these properties with SPRING_* environment variables.
+spring:
+  datasource:
+    url: jdbc:h2:mem:walletflow;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH;LOCK_TIMEOUT=10000;DB_CLOSE_DELAY=-1
+    username: sa
+    password:
