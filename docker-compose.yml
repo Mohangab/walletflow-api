@@ -1,0 +1,82 @@
+# Full local stack: API + PostgreSQL + Redis + Prometheus + Grafana
+#   docker compose up --build
+# API: http://localhost:8080/swagger-ui.html   Prometheus: http://localhost:9090   Grafana: http://localhost:3000
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: walletflow
+      POSTGRES_USER: walletflow
+      POSTGRES_PASSWORD: walletflow
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U walletflow -d walletflow"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:8-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  app:
+    build: .
+    image: walletflow-api:local
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/walletflow
+      DB_USERNAME: walletflow
+      DB_PASSWORD: walletflow
+      REDIS_HOST: redis
+      # Override these outside local development.
+      JWT_SECRET: ${JWT_SECRET:-ZGV2LW9ubHktd2FsbGV0Zmxvdy1qd3Qtc2VjcmV0LWNoYW5nZS1tZS0yMDI2IQ==}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@walletflow.dev}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-Admin#12345}
+      APP_RECONCILIATION_INTERVAL: PT1M
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:v3.15.0
+    depends_on:
+      - app
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=7d
+    volumes:
+      - ./monitoring/prometheus:/etc/prometheus:ro
+    ports:
+      - "9090:9090"
+
+  grafana:
+    image: grafana/grafana:13.2.3
+    depends_on:
+      - prometheus
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/walletflow.json
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports:
+      - "3000:3000"
+
+volumes:
+  postgres-data:

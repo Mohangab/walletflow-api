@@ -1,0 +1,36 @@
+groups:
+  - name: walletflow
+    rules:
+      - alert: LedgerReconciliationFailed
+        expr: walletflow_reconciliation_healthy == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: Ledger reconciliation failed
+          description: Stored wallet balances no longer match the double-entry ledger; see GET /api/v1/admin/reconciliation.
+
+      - alert: HighTransferFailureRate
+        expr: |
+          sum(rate(walletflow_transfer_failures_total{reason!~"insufficient-funds|idempotency-key-reused"}[5m]))
+            / clamp_min(sum(rate(walletflow_money_movements_total{type="TRANSFER"}[5m])), 0.001) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: More than 5% of transfers fail for technical reasons
+
+      - alert: TransferLatencyHigh
+        expr: histogram_quantile(0.95, sum(rate(walletflow_transfer_duration_seconds_bucket[5m])) by (le)) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: p95 transfer latency above 500ms
+
+      - alert: RateLimiterBackendErrors
+        expr: increase(walletflow_ratelimit_errors_total[5m]) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: Redis rate limiter is failing open

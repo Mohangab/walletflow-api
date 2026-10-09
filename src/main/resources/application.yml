@@ -47,6 +47,13 @@ management:
     health:
       probes:
         enabled: true
+      # Readiness depends on the database only: the Redis rate limiter fails open, so a Redis outage
+      # must not take the API out of the load balancer.
+      group:
+        readiness:
+          include: readinessState,db
+        liveness:
+          include: livenessState
   metrics:
     tags:
       application: ${spring.application.name}
