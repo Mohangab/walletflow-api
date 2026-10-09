@@ -21,6 +21,10 @@ spring:
     redis:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
+      timeout: 500ms
+    web:
+      pageable:
+        max-page-size: 100
   mvc:
     problemdetails:
       enabled: true

@@ -19,6 +19,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 
+import com.mohan.walletflow.admin.ReconciliationService;
 import com.mohan.walletflow.ledger.LedgerEntryRepository;
 import com.mohan.walletflow.payment.dto.DepositRequest;
 import com.mohan.walletflow.payment.dto.TransferRequest;
@@ -50,6 +51,8 @@ class ConcurrentTransfersIT extends IntegrationTestBase {
     private WalletRepository wallets;
     @Autowired
     private LedgerEntryRepository entries;
+    @Autowired
+    private ReconciliationService reconciliation;
 
     private record Account(AuthenticatedUser user, UUID walletId) {
     }
@@ -132,6 +135,10 @@ class ConcurrentTransfersIT extends IntegrationTestBase {
         }
         assertThat(total).as("money is conserved")
                 .isEqualByComparingTo(INITIAL.multiply(BigDecimal.valueOf(accounts.size())));
+        var report = reconciliation.reconcile();
+        assertThat(report.mismatches()).as("reconciliation mismatches").isEmpty();
+        assertThat(report.unbalancedTransactions()).isEmpty();
+        assertThat(report.healthy()).isTrue();
     }
 
     private interface Task {
