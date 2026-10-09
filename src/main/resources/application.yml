@@ -55,3 +55,14 @@ springdoc:
   swagger-ui:
     path: /swagger-ui.html
     operations-sorter: method
+
+app:
+  jwt:
+    # Base64 HMAC key. The default is for local development only; always set JWT_SECRET in real deployments.
+    secret: ${JWT_SECRET:ZGV2LW9ubHktd2FsbGV0Zmxvdy1qd3Qtc2VjcmV0LWNoYW5nZS1tZS0yMDI2IQ==}
+    issuer: walletflow-api
+    access-token-ttl: ${JWT_ACCESS_TTL:15m}
+    refresh-token-ttl: ${JWT_REFRESH_TTL:7d}
+  admin:
+    email: ${ADMIN_EMAIL:admin@walletflow.dev}
+    password: ${ADMIN_PASSWORD:}

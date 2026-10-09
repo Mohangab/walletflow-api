@@ -6,3 +6,8 @@ spring:
     url: jdbc:h2:mem:walletflow;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH;LOCK_TIMEOUT=10000;DB_CLOSE_DELAY=-1
     username: sa
     password:
+
+app:
+  admin:
+    email: admin@walletflow.test
+    password: Admin#Pass123
