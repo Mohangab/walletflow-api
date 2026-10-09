@@ -18,9 +18,16 @@ public interface WalletRepository extends JpaRepository<Wallet, UUID> {
     @Query("select w from Wallet w where w.id = :id")
     Optional<Wallet> findByIdForUpdate(@Param("id") UUID id);
 
-    List<Wallet> findByOwnerIdOrderByCreatedAtAsc(UUID ownerId);
+    @Query("select new com.mohan.walletflow.wallet.WalletRef(w.id, w.ownerId, w.currency) from Wallet w where w.id = :id")
+    Optional<WalletRef> findRefById(@Param("id") UUID id);
 
-    Optional<Wallet> findByOwnerIdAndCurrency(UUID ownerId, String currency);
+    @Query("select w.id from Wallet w where w.ownerId = :ownerId and w.currency = :currency")
+    Optional<UUID> findIdByOwnerIdAndCurrency(@Param("ownerId") UUID ownerId, @Param("currency") String currency);
+
+    @Query("select w.id from Wallet w where w.kind = com.mohan.walletflow.wallet.WalletKind.SYSTEM and w.currency = :currency")
+    Optional<UUID> findSystemWalletId(@Param("currency") String currency);
+
+    List<Wallet> findByOwnerIdOrderByCreatedAtAsc(UUID ownerId);
 
     boolean existsByOwnerIdAndCurrency(UUID ownerId, String currency);
 
