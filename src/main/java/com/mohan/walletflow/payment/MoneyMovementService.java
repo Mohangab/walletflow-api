@@ -2,6 +2,7 @@ package com.mohan.walletflow.payment;
 
 import java.util.Map;
 import java.util.UUID;
+import java.util.function.Supplier;
 
 import org.springframework.stereotype.Service;
 
@@ -13,6 +14,7 @@ import com.mohan.walletflow.idempotency.IdempotentResult;
 import com.mohan.walletflow.ledger.LedgerService;
 import com.mohan.walletflow.ledger.LedgerService.Posting;
 import com.mohan.walletflow.ledger.TransactionType;
+import com.mohan.walletflow.observability.PaymentMetrics;
 import com.mohan.walletflow.payment.dto.DepositRequest;
 import com.mohan.walletflow.payment.dto.TransactionResponse;
 import com.mohan.walletflow.payment.dto.TransferRequest;
@@ -40,10 +42,12 @@ public class MoneyMovementService {
     private final UserRepository users;
     private final LedgerService ledger;
     private final IdempotencyService idempotency;
+    private final PaymentMetrics metrics;
 
     public MoneyMovementService(TransactionRunner txRunner, WalletLocker locker, WalletRepository wallets,
-            UserRepository users, LedgerService ledger, IdempotencyService idempotency) {
+            UserRepository users, LedgerService ledger, IdempotencyService idempotency, PaymentMetrics metrics) {
         this.idempotency = idempotency;
+        this.metrics = metrics;
         this.txRunner = txRunner;
         this.locker = locker;
         this.wallets = wallets;
@@ -53,35 +57,54 @@ public class MoneyMovementService {
 
     /** Funds arrive from outside (bank / card rails): debit the currency's settlement account, credit the wallet. */
     public TransactionResponse deposit(AuthenticatedUser user, UUID walletId, DepositRequest request) {
-        return txRunner.inTransactionWithRetry(() -> doDeposit(user, walletId, request));
+        return instrumented(TransactionType.DEPOSIT, () -> fresh(() -> doDeposit(user, walletId, request))).body();
     }
 
     public TransactionResponse withdraw(AuthenticatedUser user, UUID walletId, WithdrawalRequest request) {
-        return txRunner.inTransactionWithRetry(() -> doWithdraw(user, walletId, request));
+        return instrumented(TransactionType.WITHDRAWAL, () -> fresh(() -> doWithdraw(user, walletId, request))).body();
     }
 
     public TransactionResponse transfer(AuthenticatedUser user, TransferRequest request) {
-        return txRunner.inTransactionWithRetry(() -> doTransfer(user, request));
+        return instrumented(TransactionType.TRANSFER, () -> fresh(() -> doTransfer(user, request))).body();
     }
 
     // --- Idempotent variants used by the REST API (Idempotency-Key header) ---
 
     public IdempotentResult<TransactionResponse> deposit(AuthenticatedUser user, UUID walletId, DepositRequest request,
             String idempotencyKey) {
-        return idempotency.execute(user.id(), idempotencyKey, "POST /wallets/" + walletId + "/deposits", request,
-                TransactionResponse.class, () -> doDeposit(user, walletId, request));
+        return instrumented(TransactionType.DEPOSIT, () -> idempotency.execute(user.id(), idempotencyKey,
+                "POST /wallets/" + walletId + "/deposits", request, TransactionResponse.class,
+                () -> doDeposit(user, walletId, request)));
     }
 
     public IdempotentResult<TransactionResponse> withdraw(AuthenticatedUser user, UUID walletId,
             WithdrawalRequest request, String idempotencyKey) {
-        return idempotency.execute(user.id(), idempotencyKey, "POST /wallets/" + walletId + "/withdrawals", request,
-                TransactionResponse.class, () -> doWithdraw(user, walletId, request));
+        return instrumented(TransactionType.WITHDRAWAL, () -> idempotency.execute(user.id(), idempotencyKey,
+                "POST /wallets/" + walletId + "/withdrawals", request, TransactionResponse.class,
+                () -> doWithdraw(user, walletId, request)));
     }
 
     public IdempotentResult<TransactionResponse> transfer(AuthenticatedUser user, TransferRequest request,
             String idempotencyKey) {
-        return idempotency.execute(user.id(), idempotencyKey, "POST /transfers", request,
-                TransactionResponse.class, () -> doTransfer(user, request));
+        return instrumented(TransactionType.TRANSFER, () -> idempotency.execute(user.id(), idempotencyKey,
+                "POST /transfers", request, TransactionResponse.class, () -> doTransfer(user, request)));
+    }
+
+    private IdempotentResult<TransactionResponse> fresh(Supplier<TransactionResponse> work) {
+        return new IdempotentResult<>(txRunner.inTransactionWithRetry(work), false);
+    }
+
+    private IdempotentResult<TransactionResponse> instrumented(TransactionType type,
+            Supplier<IdempotentResult<TransactionResponse>> operation) {
+        long start = System.nanoTime();
+        try {
+            IdempotentResult<TransactionResponse> result = operation.get();
+            metrics.success(type, result.body(), result.replayed(), System.nanoTime() - start);
+            return result;
+        } catch (RuntimeException ex) {
+            metrics.failure(type, ex);
+            throw ex;
+        }
     }
 
     // --- the following run inside the caller's transaction (used directly by the idempotency layer) ---

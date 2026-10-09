@@ -10,6 +10,8 @@ import org.springframework.web.servlet.HandlerInterceptor;
 import com.mohan.walletflow.common.error.RateLimitExceededException;
 import com.mohan.walletflow.security.AuthenticatedUser;
 
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 
@@ -25,11 +27,19 @@ public class RateLimitInterceptor implements HandlerInterceptor {
     private final RateLimiter limiter;
     private final RateLimitProperties properties;
     private final String bucketName;
+    private final Counter rejections;
+    private final Counter limiterErrors;
 
-    public RateLimitInterceptor(RateLimiter limiter, RateLimitProperties properties, String bucketName) {
+    public RateLimitInterceptor(RateLimiter limiter, RateLimitProperties properties, String bucketName,
+            MeterRegistry registry) {
         this.limiter = limiter;
         this.properties = properties;
         this.bucketName = bucketName;
+        this.rejections = Counter.builder("walletflow.ratelimit.rejections")
+                .description("Requests rejected with 429").tag("bucket", bucketName).register(registry);
+        this.limiterErrors = Counter.builder("walletflow.ratelimit.errors")
+                .description("Rate limiter backend failures (request allowed: fail-open)").tag("bucket", bucketName)
+                .register(registry);
     }
 
     @Override
@@ -46,23 +56,16 @@ public class RateLimitInterceptor implements HandlerInterceptor {
             decision = limiter.tryConsume("rate:" + bucketName + ":" + user.id());
         } catch (RuntimeException ex) {
             log.error("Rate limiter unavailable, allowing request: {}", ex.getMessage());
-            onLimiterError();
+            limiterErrors.increment();
             return true;
         }
         response.setHeader("X-RateLimit-Limit", String.valueOf(properties.capacity()));
         if (!decision.allowed()) {
-            onRejected();
+            rejections.increment();
             throw new RateLimitExceededException(Math.max(1, (decision.retryAfterMillis() + 999) / 1000),
                     properties.capacity());
         }
         response.setHeader("X-RateLimit-Remaining", String.valueOf(decision.remaining()));
         return true;
-    }
-
-    /** Extension points for metrics. */
-    protected void onRejected() {
-    }
-
-    protected void onLimiterError() {
     }
 }

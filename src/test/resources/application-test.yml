@@ -8,6 +8,8 @@ spring:
     password:
 
 app:
+  scheduling:
+    enabled: false
   rate-limit:
     store: memory
     capacity: 100000

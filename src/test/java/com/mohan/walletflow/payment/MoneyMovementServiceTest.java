@@ -31,7 +31,10 @@ import com.mohan.walletflow.common.tx.TransactionRunner;
 import com.mohan.walletflow.ledger.LedgerEntryRepository;
 import com.mohan.walletflow.ledger.LedgerService;
 import com.mohan.walletflow.ledger.LedgerTransactionRepository;
+import com.mohan.walletflow.observability.PaymentMetrics;
 import com.mohan.walletflow.payment.dto.TransactionResponse;
+
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import com.mohan.walletflow.payment.dto.TransferRequest;
 import com.mohan.walletflow.security.AuthenticatedUser;
 import com.mohan.walletflow.user.Role;
@@ -67,7 +70,8 @@ class MoneyMovementServiceTest {
     void setUp() {
         LedgerService ledger = new LedgerService(ledgerTransactions, ledgerEntries,
                 Clock.fixed(Instant.parse("2026-05-01T00:00:00Z"), ZoneOffset.UTC));
-        service = new MoneyMovementService(txRunner, locker, wallets, users, ledger, null);
+        service = new MoneyMovementService(txRunner, locker, wallets, users, ledger, null,
+                new PaymentMetrics(new SimpleMeterRegistry()));
         lenient().when(txRunner.inTransactionWithRetry(any())).thenAnswer(inv -> ((Supplier<Object>) inv.getArgument(0)).get());
         lenient().when(ledgerTransactions.save(any())).thenAnswer(inv -> inv.getArgument(0));
 

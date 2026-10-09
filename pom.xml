@@ -121,6 +121,13 @@
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>build-info</goal>
+                        </goals>
+                    </execution>
+                </executions>
             </plugin>
             <plugin>
                 <!-- Exposes ${org.mockito:mockito-core:jar} so Mockito can be loaded as a javaagent (JDK 21+ friendly) -->
