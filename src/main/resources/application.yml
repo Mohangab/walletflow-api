@@ -63,6 +63,15 @@ app:
     issuer: walletflow-api
     access-token-ttl: ${JWT_ACCESS_TTL:15m}
     refresh-token-ttl: ${JWT_REFRESH_TTL:7d}
+  rate-limit:
+    enabled: ${RATE_LIMIT_ENABLED:true}
+    store: ${RATE_LIMIT_STORE:redis}
+    # burst of 10 transfers, refilled at 10 per minute, per user
+    capacity: ${RATE_LIMIT_CAPACITY:10}
+    refill-tokens: ${RATE_LIMIT_REFILL_TOKENS:10}
+    refill-period: ${RATE_LIMIT_REFILL_PERIOD:1m}
+  idempotency:
+    ttl: 24h
   admin:
     email: ${ADMIN_EMAIL:admin@walletflow.dev}
     password: ${ADMIN_PASSWORD:}

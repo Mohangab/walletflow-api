@@ -8,6 +8,17 @@ spring:
     password:
 
 app:
+  rate-limit:
+    store: memory
+    capacity: 100000
+    refill-tokens: 100000
+    refill-period: 1s
   admin:
     email: admin@walletflow.test
     password: Admin#Pass123
+
+# No Redis is needed for the default test run (rate limiting uses the in-memory store).
+management:
+  health:
+    redis:
+      enabled: false
