@@ -8,6 +8,8 @@ import org.springframework.stereotype.Service;
 import com.mohan.walletflow.common.error.BusinessRuleException;
 import com.mohan.walletflow.common.error.NotFoundException;
 import com.mohan.walletflow.common.tx.TransactionRunner;
+import com.mohan.walletflow.idempotency.IdempotencyService;
+import com.mohan.walletflow.idempotency.IdempotentResult;
 import com.mohan.walletflow.ledger.LedgerService;
 import com.mohan.walletflow.ledger.LedgerService.Posting;
 import com.mohan.walletflow.ledger.TransactionType;
@@ -37,9 +39,11 @@ public class MoneyMovementService {
     private final WalletRepository wallets;
     private final UserRepository users;
     private final LedgerService ledger;
+    private final IdempotencyService idempotency;
 
     public MoneyMovementService(TransactionRunner txRunner, WalletLocker locker, WalletRepository wallets,
-            UserRepository users, LedgerService ledger) {
+            UserRepository users, LedgerService ledger, IdempotencyService idempotency) {
+        this.idempotency = idempotency;
         this.txRunner = txRunner;
         this.locker = locker;
         this.wallets = wallets;
@@ -58,6 +62,26 @@ public class MoneyMovementService {
 
     public TransactionResponse transfer(AuthenticatedUser user, TransferRequest request) {
         return txRunner.inTransactionWithRetry(() -> doTransfer(user, request));
+    }
+
+    // --- Idempotent variants used by the REST API (Idempotency-Key header) ---
+
+    public IdempotentResult<TransactionResponse> deposit(AuthenticatedUser user, UUID walletId, DepositRequest request,
+            String idempotencyKey) {
+        return idempotency.execute(user.id(), idempotencyKey, "POST /wallets/" + walletId + "/deposits", request,
+                TransactionResponse.class, () -> doDeposit(user, walletId, request));
+    }
+
+    public IdempotentResult<TransactionResponse> withdraw(AuthenticatedUser user, UUID walletId,
+            WithdrawalRequest request, String idempotencyKey) {
+        return idempotency.execute(user.id(), idempotencyKey, "POST /wallets/" + walletId + "/withdrawals", request,
+                TransactionResponse.class, () -> doWithdraw(user, walletId, request));
+    }
+
+    public IdempotentResult<TransactionResponse> transfer(AuthenticatedUser user, TransferRequest request,
+            String idempotencyKey) {
+        return idempotency.execute(user.id(), idempotencyKey, "POST /transfers", request,
+                TransactionResponse.class, () -> doTransfer(user, request));
     }
 
     // --- the following run inside the caller's transaction (used directly by the idempotency layer) ---

@@ -67,7 +67,7 @@ class MoneyMovementServiceTest {
     void setUp() {
         LedgerService ledger = new LedgerService(ledgerTransactions, ledgerEntries,
                 Clock.fixed(Instant.parse("2026-05-01T00:00:00Z"), ZoneOffset.UTC));
-        service = new MoneyMovementService(txRunner, locker, wallets, users, ledger);
+        service = new MoneyMovementService(txRunner, locker, wallets, users, ledger, null);
         lenient().when(txRunner.inTransactionWithRetry(any())).thenAnswer(inv -> ((Supplier<Object>) inv.getArgument(0)).get());
         lenient().when(ledgerTransactions.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
