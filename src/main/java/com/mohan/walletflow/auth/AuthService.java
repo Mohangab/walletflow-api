@@ -2,6 +2,7 @@ package com.mohan.walletflow.auth;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.util.UUID;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -100,7 +101,7 @@ public class AuthService {
     }
 
     @Transactional(readOnly = true)
-    public UserResponse me(java.util.UUID userId) {
+    public UserResponse me(UUID userId) {
         return users.findById(userId).map(UserResponse::from).orElseThrow(() -> new NotFoundException("User", userId));
     }
 
